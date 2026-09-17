@@ -33,6 +33,12 @@ for (const id of interactiveIds) {
 
 const requiredRendererSignals = [
   "#version 300 es",
+  "deFlowField",
+  "uFlowSpeed",
+  "uFlowWarp",
+  "uFilament",
+  "uGrain",
+  "Filament Grain",
   "deJulia4",
   "deMandelbulb",
   "deMandelbox",

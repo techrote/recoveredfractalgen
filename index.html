@@ -15,7 +15,7 @@
   <header class="toolbar">
     <div class="brand">
       <strong>RECOVERED FRACTAL GENERATOR</strong>
-      <span class="tag">reconstruction v1</span>
+      <span class="tag">reconstruction v2 · flow field</span>
     </div>
     <label class="compact">Preset
       <select id="preset"></select>
@@ -32,10 +32,10 @@
   <aside id="panel" class="panel">
     <section class="intro">
       <div>
-        <span id="modeBadge" class="badge">Quaternion Julia 4D</span>
-        <span id="cameraBadge" class="badge quiet">Orbit</span>
+        <span id="modeBadge" class="badge">Recursive Flow Filaments</span>
+        <span id="cameraBadge" class="badge quiet">Flow Chase</span>
       </div>
-      <p>Drag to orbit. Wheel to zoom. Drop an image onto the viewport to texture the fractal.</p>
+      <p>The camera rides inside an advecting fractal field. Drag to bias the view, wheel to alter follow distance, or drop an image to texture the flow.</p>
     </section>
 
     <details open>
@@ -43,17 +43,18 @@
       <div class="control">
         <label for="fractalMode">Family</label>
         <select id="fractalMode">
-          <option value="0">Quaternion Julia 4D</option>
-          <option value="1">Mandelbulb</option>
-          <option value="2">Mandelbox</option>
-          <option value="3">Folded Loop IFS</option>
+          <option value="0">Recursive Flow Filaments</option>
+          <option value="1">Quaternion Julia 4D</option>
+          <option value="2">Mandelbulb</option>
+          <option value="3">Mandelbox</option>
+          <option value="4">Folded Loop IFS</option>
         </select>
       </div>
       <div id="fractalControls" class="controls"></div>
     </details>
 
     <details open>
-      <summary>4D / Growth</summary>
+      <summary>Flow / Growth / 4D</summary>
       <div id="motionControls" class="controls"></div>
     </details>
 
@@ -62,9 +63,11 @@
       <div class="control">
         <label for="cameraMode">Motion</label>
         <select id="cameraMode">
-          <option>Orbit</option>
-          <option>Chase</option>
+          <option>Flow Chase</option>
           <option>Flythrough</option>
+          <option>Follow Growth</option>
+          <option>Chase</option>
+          <option>Orbit</option>
           <option>Lissajous</option>
           <option>4D Lock</option>
           <option>Observer</option>
@@ -78,6 +81,7 @@
       <div class="control">
         <label for="texturePreset">Texture</label>
         <select id="texturePreset">
+          <option>Filament Grain</option>
           <option>Plasma</option>
           <option>Veins</option>
           <option>Cells</option>
@@ -109,7 +113,7 @@
         <button id="copyState">Copy settings</button>
         <button id="recenter">Recenter camera</button>
       </div>
-      <p class="hint">Keys: Space pause · R mutate · H UI · 1–6 presets · F fullscreen.</p>
+      <p class="hint">Keys: Space pause · R mutate · H UI · 1–6 presets · F fullscreen. Flow Chase is the intended default.</p>
     </details>
   </aside>
 

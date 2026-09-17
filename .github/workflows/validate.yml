@@ -2,7 +2,7 @@ name: validate-reconstruction
 
 on:
   push:
-    branches: [main, rebuild-live-renderer]
+    branches: ["**"]
   pull_request:
 
 permissions:
