@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Recovered Fractal Generator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="view" aria-label="Live fractal renderer"></canvas>
+
+  <div id="fatal" class="fatal hidden" role="alert"></div>
+
+  <header class="toolbar">
+    <div class="brand">
+      <strong>RECOVERED FRACTAL GENERATOR</strong>
+      <span class="tag">reconstruction v1</span>
+    </div>
+    <label class="compact">Preset
+      <select id="preset"></select>
+    </label>
+    <button id="applyPreset">Apply</button>
+    <button id="pause">Pause</button>
+    <button id="randomize">Mutate</button>
+    <button id="reset">Reset</button>
+    <button id="shot">PNG</button>
+    <button id="fullscreen">Fullscreen</button>
+    <button id="toggleUi" title="H">Hide UI</button>
+  </header>
+
+  <aside id="panel" class="panel">
+    <section class="intro">
+      <div>
+        <span id="modeBadge" class="badge">Quaternion Julia 4D</span>
+        <span id="cameraBadge" class="badge quiet">Orbit</span>
+      </div>
+      <p>Drag to orbit. Wheel to zoom. Drop an image onto the viewport to texture the fractal.</p>
+    </section>
+
+    <details open>
+      <summary>Fractal</summary>
+      <div class="control">
+        <label for="fractalMode">Family</label>
+        <select id="fractalMode">
+          <option value="0">Quaternion Julia 4D</option>
+          <option value="1">Mandelbulb</option>
+          <option value="2">Mandelbox</option>
+          <option value="3">Folded Loop IFS</option>
+        </select>
+      </div>
+      <div id="fractalControls" class="controls"></div>
+    </details>
+
+    <details open>
+      <summary>4D / Growth</summary>
+      <div id="motionControls" class="controls"></div>
+    </details>
+
+    <details open>
+      <summary>Camera</summary>
+      <div class="control">
+        <label for="cameraMode">Motion</label>
+        <select id="cameraMode">
+          <option>Orbit</option>
+          <option>Chase</option>
+          <option>Flythrough</option>
+          <option>Lissajous</option>
+          <option>4D Lock</option>
+          <option>Observer</option>
+        </select>
+      </div>
+      <div id="cameraControls" class="controls"></div>
+    </details>
+
+    <details>
+      <summary>Surface / Texture</summary>
+      <div class="control">
+        <label for="texturePreset">Texture</label>
+        <select id="texturePreset">
+          <option>Plasma</option>
+          <option>Veins</option>
+          <option>Cells</option>
+          <option>Grid</option>
+        </select>
+      </div>
+      <label class="fileButton">
+        Load image texture
+        <input id="textureFile" type="file" accept="image/*">
+      </label>
+      <div id="materialControls" class="controls"></div>
+    </details>
+
+    <details>
+      <summary>Light / Atmosphere</summary>
+      <div id="lightControls" class="controls"></div>
+    </details>
+
+    <details>
+      <summary>Quality</summary>
+      <div id="qualityControls" class="controls"></div>
+    </details>
+
+    <details>
+      <summary>Session</summary>
+      <div class="buttonGrid">
+        <button id="exportState">Export JSON</button>
+        <label class="fileButton small">Import JSON<input id="importState" type="file" accept=".json,application/json"></label>
+        <button id="copyState">Copy settings</button>
+        <button id="recenter">Recenter camera</button>
+      </div>
+      <p class="hint">Keys: Space pause · R mutate · H UI · 1–6 presets · F fullscreen.</p>
+    </details>
+  </aside>
+
+  <footer id="stats" class="stats">
+    <span id="fps">-- fps</span>
+    <span id="resolution">-- × --</span>
+    <span id="timeReadout">t 0.00</span>
+    <span id="status">initialising</span>
+  </footer>
+
+  <script src="src/app.js"></script>
+</body>
+</html>

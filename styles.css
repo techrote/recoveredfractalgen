@@ -1,0 +1,81 @@
+:root {
+  color-scheme: dark;
+  --panel: rgba(9, 12, 18, .88);
+  --panel2: rgba(18, 24, 34, .92);
+  --line: rgba(255,255,255,.12);
+  --text: #e8eef6;
+  --muted: #93a1b3;
+  --accent: #84d8ff;
+  --good: #9bffca;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { width:100%; height:100%; margin:0; overflow:hidden; background:#020307; color:var(--text); }
+body { user-select:none; }
+#view { position:fixed; inset:0; width:100%; height:100%; display:block; background:#020307; cursor:grab; }
+#view:active { cursor:grabbing; }
+.toolbar {
+  position:fixed; z-index:4; left:0; top:0; right:0; min-height:44px;
+  display:flex; align-items:center; gap:.45rem; padding:.4rem .55rem;
+  background:linear-gradient(180deg,rgba(4,7,11,.96),rgba(4,7,11,.72));
+  border-bottom:1px solid var(--line); backdrop-filter:blur(10px);
+}
+.brand { display:flex; align-items:baseline; gap:.55rem; margin-right:auto; white-space:nowrap; }
+.brand strong { font-size:.76rem; letter-spacing:.14em; }
+.tag { font-size:.67rem; color:var(--muted); }
+button, select, .fileButton {
+  border:1px solid var(--line); background:rgba(255,255,255,.055); color:var(--text);
+  border-radius:5px; min-height:29px; padding:.28rem .52rem; font:inherit; font-size:.72rem;
+}
+button:hover, select:hover, .fileButton:hover { border-color:rgba(132,216,255,.48); background:rgba(132,216,255,.09); }
+button:active { transform:translateY(1px); }
+.compact { display:flex; align-items:center; gap:.35rem; color:var(--muted); font-size:.68rem; }
+.panel {
+  position:fixed; z-index:3; top:44px; right:0; bottom:27px; width:min(360px,34vw);
+  overflow:auto; background:var(--panel); border-left:1px solid var(--line); backdrop-filter:blur(10px);
+  scrollbar-width:thin;
+}
+.intro { padding:.65rem .72rem .4rem; border-bottom:1px solid var(--line); }
+.intro p, .hint { margin:.5rem 0; font-size:.69rem; color:var(--muted); line-height:1.45; }
+.badge { display:inline-block; padding:.18rem .38rem; border:1px solid rgba(132,216,255,.32); color:var(--accent); border-radius:3px; font-size:.65rem; margin-right:.25rem; }
+.badge.quiet { color:var(--good); border-color:rgba(155,255,202,.25); }
+details { border-bottom:1px solid var(--line); }
+summary { cursor:pointer; padding:.58rem .72rem; font-size:.73rem; font-weight:650; letter-spacing:.04em; background:rgba(255,255,255,.025); }
+summary:hover { background:rgba(255,255,255,.045); }
+.controls { padding:.25rem .7rem .55rem; }
+.control {
+  display:grid; grid-template-columns:minmax(92px,1fr) minmax(120px,1.25fr) 52px;
+  align-items:center; gap:.5rem; min-height:31px; font-size:.68rem;
+}
+.control > label:first-child { color:#b6c1cf; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.control > select { grid-column:2 / 4; width:100%; }
+.control output { text-align:right; color:var(--accent); font-variant-numeric:tabular-nums; }
+input[type="range"] { width:100%; accent-color:#8bd9ff; }
+input[type="file"] { display:none; }
+.fileButton { display:block; margin:.35rem .7rem .45rem; text-align:center; cursor:pointer; }
+.fileButton.small { margin:0; display:flex; align-items:center; justify-content:center; }
+.buttonGrid { display:grid; grid-template-columns:1fr 1fr; gap:.4rem; padding:.6rem .7rem .25rem; }
+.stats {
+  position:fixed; z-index:5; left:0; right:0; bottom:0; height:27px;
+  display:flex; align-items:center; gap:1rem; padding:0 .62rem; font:11px/1 ui-monospace,SFMono-Regular,Consolas,monospace;
+  color:var(--muted); background:rgba(4,7,11,.86); border-top:1px solid var(--line); pointer-events:none;
+}
+.stats span:last-child { margin-left:auto; color:#b8c8d8; }
+.fatal {
+  position:fixed; z-index:20; inset:20% 15%; padding:2rem; white-space:pre-wrap;
+  background:#17090c; border:1px solid #8f3c4a; border-radius:8px; color:#ffd4da; font-family:ui-monospace,monospace;
+}
+.hidden { display:none !important; }
+body.uiHidden .toolbar, body.uiHidden .panel { display:none; }
+body.uiHidden .stats { background:rgba(0,0,0,.35); border-color:transparent; }
+.dropActive::after {
+  content:"DROP TEXTURE"; position:fixed; z-index:8; inset:10%; display:grid; place-items:center;
+  border:2px dashed rgba(132,216,255,.7); background:rgba(5,15,22,.66); color:var(--accent);
+  font:700 1.2rem ui-monospace,monospace; letter-spacing:.18em; pointer-events:none;
+}
+@media (max-width:900px) {
+  .tag, .compact { display:none; }
+  .toolbar { overflow-x:auto; }
+  .panel { width:min(380px,88vw); }
+  .brand { margin-right:.2rem; }
+}
