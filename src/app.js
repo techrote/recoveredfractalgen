@@ -22,15 +22,15 @@
     die("WebGL2 is required for the recovered fractal renderer.\n\nTry a current Chrome, Edge, or Firefox build with hardware acceleration enabled.");
   }
 
-  const VERTEX_SHADER = \`#version 300 es
+  const VERTEX_SHADER = `#version 300 es
 precision highp float;
 void main() {
   vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }
-\`;
+`;
 
-  const FRAGMENT_SHADER = \`#version 300 es
+  const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
 
@@ -356,7 +356,7 @@ void main() {
   float vignette = 1.0 - 0.13 * pow(length(uv) * 0.62, 2.0);
   fragColor = vec4(color * vignette, 1.0);
 }
-\`;
+`;
 
   function compile(type, source, label) {
     const shader = gl.createShader(type);
