@@ -56,6 +56,10 @@ uniform float uGrowth;
 uniform float uSlice;
 uniform float uWSpin;
 uniform float uTwist;
+uniform float uFlowSpeed;
+uniform float uFlowWarp;
+uniform float uFilament;
+uniform float uGrain;
 
 uniform sampler2D uTexture;
 uniform float uTextureScale;
@@ -88,6 +92,12 @@ float hash21(vec2 p) {
   return fract(p.x * p.y);
 }
 
+float hash31(vec3 p) {
+  p = fract(p * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+
 vec3 palette(float t) {
   vec3 a = vec3(0.48, 0.44, 0.50);
   vec3 b = vec3(0.48, 0.46, 0.43);
@@ -97,16 +107,60 @@ vec3 palette(float t) {
 }
 
 vec3 animatedDomain(vec3 p) {
-  float breath = 1.0 + 0.085 * uGrowth * sin(uTime * 0.53 + length(p) * 1.65);
-  p /= max(0.35, breath);
-  p.xz = r2(p.xz, uTwist * (0.20 * uTime + 0.34 * p.y));
-  p.xy = r2(p.xy, 0.10 * uTwist * sin(uTime * 0.31 + p.z));
-  p += 0.035 * uGrowth * vec3(
-    sin(p.y * 2.1 + uTime * 0.71),
+  float flowT = uTime * uFlowSpeed;
+  p.z += flowT;
+
+  float pathX = sin(p.z * 0.21) + 0.45 * sin(p.z * 0.57 + 1.2);
+  float pathY = cos(p.z * 0.17 + 0.7) + 0.35 * sin(p.z * 0.43 - 0.4);
+  p.xy -= vec2(pathX, pathY) * uFlowWarp;
+
+  float growPhase = p.z * 0.38 - uTime * (0.72 + 0.42 * uGrowth);
+  float breath = 1.0 + 0.045 * uGrowth * sin(growPhase)
+                     + 0.022 * uGrowth * sin(growPhase * 2.7 + 0.8);
+  p.xy /= max(0.45, breath);
+
+  p.xz = r2(p.xz, uTwist * (0.075 * p.z + 0.13 * uTime));
+  p.yz = r2(p.yz, 0.035 * uTwist * sin(p.z * 0.31 - uTime * 0.27));
+  p += 0.018 * uGrowth * vec3(
     sin(p.z * 1.7 - uTime * 0.47),
-    sin(p.x * 1.9 + uTime * 0.59)
+    sin(p.z * 1.13 + uTime * 0.39),
+    sin(p.x * 1.9 + p.y * 1.4)
   );
   return p;
+}
+
+float deFlowField(vec3 p) {
+  vec3 z = p * uScale;
+  float d = 1e5;
+  float invScale = 1.0;
+  float thickness = mix(0.010, 0.080, clamp(uFilament, 0.0, 1.0));
+
+  for (int i = 0; i < MAX_ITER; ++i) {
+    if (i >= uIterations) break;
+    float fi = float(i);
+
+    z.xy = r2(z.xy, 0.55 + uTwist * 0.09 + 0.08 * sin(fi * 1.7 + uTime * 0.18));
+    z.yz = r2(z.yz, -0.37 + 0.05 * cos(fi * 1.13 - uTime * 0.13));
+    z = abs(z);
+    if (z.x < z.y) z.xy = z.yx;
+    if (z.x < z.z) z.xz = z.zx;
+
+    vec3 q = z - vec3(0.68, 0.44, 0.58);
+    float pulse = 1.0 + 0.22 * uGrowth * sin(uTime * 0.65 + fi * 1.37 + q.z * 2.0);
+    float strand = length(q.xy) - thickness * pulse;
+    float rail = max(abs(q.y) - thickness * 0.42, abs(q.z) - 0.29);
+    float ring = abs(length(q.xz) - 0.31) - thickness * 0.55;
+    d = min(d, min(strand, min(rail, ring)) * invScale);
+
+    z = z * 1.78 - vec3(1.08, 0.82, 0.94);
+    invScale /= 1.78;
+  }
+
+  float spine = length(p.xy - vec2(sin(p.z * 0.41), cos(p.z * 0.37)) * 0.18)
+              - thickness * 0.72;
+  d = min(d, spine);
+  float micro = (hash31(floor(p * 52.0)) - 0.5) * clamp(uGrain, 0.0, 1.5) * 0.0035;
+  return d + micro - uSurface;
 }
 
 float deJulia4(vec3 p) {
@@ -219,9 +273,10 @@ float deFoldedLoop(vec3 p) {
 
 float mapScene(vec3 p) {
   p = animatedDomain(p);
-  if (uMode == 0) return deJulia4(p);
-  if (uMode == 1) return deMandelbulb(p);
-  if (uMode == 2) return deMandelbox(p);
+  if (uMode == 0) return deFlowField(p);
+  if (uMode == 1) return deJulia4(p);
+  if (uMode == 2) return deMandelbulb(p);
+  if (uMode == 3) return deMandelbox(p);
   return deFoldedLoop(p);
 }
 
@@ -304,6 +359,8 @@ vec3 shade(vec3 p, vec3 n, vec3 rd, float distanceTravelled) {
   vec3 base = palette(length(p) * 0.21 + bands * 0.12 + uTime * 0.018);
   vec3 tex = triTexture(p, n);
   base = mix(base, tex, clamp(uTextureMix, 0.0, 1.0));
+  float surfaceGrain = hash31(floor((p + n * 0.07) * mix(34.0, 118.0, clamp(uGrain, 0.0, 1.0))));
+  base *= mix(1.0, 0.69 + 0.62 * surfaceGrain, clamp(uGrain, 0.0, 1.0));
 
   vec3 ambient = base * (0.11 + 0.23 * ao);
   vec3 diffuse = base * ndl * shadow * (0.62 + 0.38 * ao);
@@ -353,8 +410,11 @@ void main() {
   color = max(color, vec3(0.0));
   color = vec3(1.0) - exp(-color * max(0.05, uExposure));
   color = pow(color, vec3(0.4545));
+  float film = hash21(gl_FragCoord.xy + vec2(fract(uTime) * 997.0, floor(uTime * 31.0)));
+  float grainAmp = 0.105 * clamp(uGrain, 0.0, 1.5);
+  color += (film - 0.5) * grainAmp * (0.35 + 0.65 * sqrt(max(color, vec3(0.0))));
   float vignette = 1.0 - 0.13 * pow(length(uv) * 0.62, 2.0);
-  fragColor = vec4(color * vignette, 1.0);
+  fragColor = vec4(max(color, vec3(0.0)) * vignette, 1.0);
 }
 `;
 
@@ -385,49 +445,53 @@ void main() {
 
   const DEFAULT = {
     fractalMode: 0,
-    iterations: 11,
-    steps: 116,
-    power: 8.0,
+    iterations: 13,
+    steps: 132,
+    power: 7.4,
     bailout: 8.0,
-    scale: 1.18,
-    fold: 1.8,
-    surface: 0.004,
+    scale: 1.34,
+    fold: 1.55,
+    surface: 0.0015,
     juliaX: -0.21,
     juliaY: 0.63,
     juliaZ: -0.18,
     juliaW: -0.27,
 
-    growth: 0.78,
+    growth: 1.28,
     slice: 0.0,
-    wSpin: 0.72,
-    twist: 0.52,
+    wSpin: 0.66,
+    twist: 0.91,
+    flowSpeed: 1.05,
+    flowWarp: 0.56,
+    filament: 0.30,
+    grain: 0.82,
     timeScale: 1.0,
 
-    cameraMode: "Orbit",
-    orbitRadius: 4.4,
-    orbitSpeed: 0.18,
-    orbitHeight: 0.65,
-    chaseLag: 4.5,
-    fov: 47,
+    cameraMode: "Flow Chase",
+    orbitRadius: 3.15,
+    orbitSpeed: 0.62,
+    orbitHeight: 0.15,
+    chaseLag: 6.5,
+    fov: 69,
 
-    textureScale: 1.35,
-    textureFlow: 0.11,
-    textureMix: 0.37,
-    roughness: 0.46,
-    metallic: 0.16,
-    glow: 0.22,
-    paletteShift: 0.0,
+    textureScale: 3.15,
+    textureFlow: 0.32,
+    textureMix: 0.47,
+    roughness: 0.76,
+    metallic: 0.06,
+    glow: 0.16,
+    paletteShift: 0.08,
 
-    exposure: 1.18,
-    fog: 0.09,
-    lightSpin: 0.13,
-    shadow: 0.58,
+    exposure: 1.08,
+    fog: 0.145,
+    lightSpin: 0.08,
+    shadow: 0.38,
 
-    normalEps: 0.0022,
-    maxDistance: 28,
-    renderScale: 0.85,
+    normalEps: 0.0017,
+    maxDistance: 24,
+    renderScale: 0.78,
 
-    texturePreset: "Plasma",
+    texturePreset: "Filament Grain",
     paused: false
   };
 
@@ -440,7 +504,7 @@ void main() {
   let dragging = false;
   let dragX = 0;
   let dragY = 0;
-  let smoothCamera = [4.4, 0.8, 0.0];
+  let smoothCamera = [0.0, 0.0, 1.8];
   let smoothTarget = [0, 0, 0];
   let textureName = "Plasma";
   let customTextureLoaded = false;
@@ -450,7 +514,7 @@ void main() {
   [
     "uResolution", "uTime", "uCameraPos", "uCameraTarget", "uFov",
     "uMode", "uIterations", "uSteps", "uPower", "uBailout", "uScale", "uFold", "uSurface", "uJulia",
-    "uGrowth", "uSlice", "uWSpin", "uTwist",
+    "uGrowth", "uSlice", "uWSpin", "uTwist", "uFlowSpeed", "uFlowWarp", "uFilament", "uGrain",
     "uTexture", "uTextureScale", "uTextureFlow", "uTextureMix", "uRoughness", "uMetallic", "uGlow", "uPaletteShift",
     "uExposure", "uFog", "uLightSpin", "uShadow", "uNormalEps", "uMaxDistance"
   ].forEach(name => uniforms[name] = gl.getUniformLocation(program, name));
@@ -476,7 +540,15 @@ void main() {
         const px = u * Math.PI * 2;
         const py = v * Math.PI * 2;
         let r, g, b;
-        if (kind === "Veins") {
+        if (kind === "Filament Grain") {
+          const streak = 0.5 + 0.5 * Math.sin(px * 1.7 + Math.sin(py * 4.0) * 2.2);
+          const hair = Math.pow(Math.abs(Math.sin(px * 11.0 + py * 2.7)), 7);
+          const speck = hash2(x * 0.73 + y * 0.17, y * 0.91 - x * 0.11);
+          const grit = Math.pow(speck, 8);
+          r = 24 + 154 * streak + 72 * hair + 55 * grit;
+          g = 22 + 104 * streak + 90 * hair + 28 * grit;
+          b = 34 + 128 * (1 - streak) + 108 * hair + 78 * grit;
+        } else if (kind === "Veins") {
           const n = Math.sin(px * 3.0 + Math.sin(py * 5.0)) + Math.sin(py * 4.0 - Math.cos(px * 6.0));
           const q = Math.pow(Math.abs(Math.sin(n * 2.1)), 0.26);
           r = 35 + 170 * q;
@@ -576,6 +648,7 @@ void main() {
       ["bailout", "Bailout", 2, 18, 0.1, 1],
       ["scale", "Domain scale", 0.45, 2.5, 0.01, 2],
       ["fold", "Fold strength", 0, 4, 0.01, 2],
+      ["filament", "Filament width", 0.02, 1, 0.01, 2],
       ["surface", "Surface bias", -0.02, 0.04, 0.0005, 4],
       ["juliaX", "Julia X", -1.2, 1.2, 0.005, 3],
       ["juliaY", "Julia Y", -1.2, 1.2, 0.005, 3],
@@ -583,15 +656,17 @@ void main() {
       ["juliaW", "Julia W", -1.2, 1.2, 0.005, 3]
     ],
     motionControls: [
-      ["growth", "Growth pulse", 0, 2.5, 0.01, 2],
+      ["growth", "Growth / propagation", 0, 2.5, 0.01, 2],
+      ["flowSpeed", "Space flow", 0, 4, 0.01, 2],
+      ["flowWarp", "Flow path warp", 0, 1.5, 0.01, 2],
       ["slice", "4D slice W", -1.5, 1.5, 0.005, 3],
       ["wSpin", "4D rotation", -2.5, 2.5, 0.01, 2],
       ["twist", "Domain twist", -2.5, 2.5, 0.01, 2],
       ["timeScale", "Time scale", 0, 3, 0.01, 2]
     ],
     cameraControls: [
-      ["orbitRadius", "Distance", 1.3, 12, 0.02, 2],
-      ["orbitSpeed", "Orbit speed", -1.5, 1.5, 0.01, 2],
+      ["orbitRadius", "Follow distance", 0.8, 12, 0.02, 2],
+      ["orbitSpeed", "Camera rate", -1.5, 1.5, 0.01, 2],
       ["orbitHeight", "Height", -3, 3, 0.01, 2],
       ["chaseLag", "Chase response", 0.4, 12, 0.1, 1],
       ["fov", "Field of view", 18, 105, 1, 0]
@@ -600,6 +675,7 @@ void main() {
       ["textureScale", "Texture scale", 0.05, 8, 0.01, 2],
       ["textureFlow", "Texture flow", -1.5, 1.5, 0.01, 2],
       ["textureMix", "Texture mix", 0, 1, 0.01, 2],
+      ["grain", "Surface grain", 0, 1.5, 0.01, 2],
       ["roughness", "Roughness", 0, 1, 0.01, 2],
       ["metallic", "Metallic", 0, 1, 0.01, 2],
       ["glow", "Emission", 0, 2, 0.01, 2],
@@ -652,39 +728,39 @@ void main() {
     specs.forEach(spec => addSlider(container, spec));
   });
 
-  const MODE_NAMES = ["Quaternion Julia 4D", "Mandelbulb", "Mandelbox", "Folded Loop IFS"];
+  const MODE_NAMES = ["Recursive Flow Filaments", "Quaternion Julia 4D", "Mandelbulb", "Mandelbox", "Folded Loop IFS"];
 
   const PRESETS = {
-    "Quaternion Bloom": {
-      fractalMode: 0, iterations: 11, scale: 1.18, juliaX: -0.21, juliaY: 0.63, juliaZ: -0.18, juliaW: -0.27,
-      growth: 0.78, slice: 0.0, wSpin: 0.72, twist: 0.52, cameraMode: "Orbit", orbitRadius: 4.4, orbitSpeed: 0.18,
-      texturePreset: "Plasma", textureScale: 1.35, textureFlow: 0.11, textureMix: 0.37, glow: 0.22, paletteShift: 0.0
+    "Flow Chase": {
+      fractalMode: 0, iterations: 13, scale: 1.34, filament: 0.30, growth: 1.28, flowSpeed: 1.05, flowWarp: 0.56, twist: 0.91,
+      cameraMode: "Flow Chase", orbitRadius: 3.15, orbitSpeed: 0.62, fov: 69, texturePreset: "Filament Grain",
+      textureScale: 3.15, textureFlow: 0.32, textureMix: 0.47, grain: 0.82, roughness: 0.76, metallic: 0.06, glow: 0.16, fog: 0.145
     },
-    "4D Torus Drift": {
-      fractalMode: 0, iterations: 13, scale: 1.05, juliaX: -0.08, juliaY: 0.71, juliaZ: 0.12, juliaW: -0.31,
-      growth: 1.15, slice: 0.24, wSpin: 1.08, twist: 0.88, cameraMode: "4D Lock", orbitRadius: 4.9, orbitSpeed: 0.1,
-      texturePreset: "Veins", textureScale: 2.1, textureFlow: -0.08, textureMix: 0.46, glow: 0.38, paletteShift: 0.29
+    "Fast Thread Tunnel": {
+      fractalMode: 0, iterations: 15, scale: 1.52, filament: 0.20, growth: 1.65, flowSpeed: 1.85, flowWarp: 0.78, twist: 1.24,
+      cameraMode: "Flythrough", orbitRadius: 2.4, orbitSpeed: 0.9, fov: 78, texturePreset: "Filament Grain",
+      textureScale: 4.4, textureFlow: 0.55, textureMix: 0.39, grain: 1.10, roughness: 0.87, metallic: 0.02, glow: 0.10, fog: 0.19
     },
-    "Mandelbulb Growth": {
-      fractalMode: 1, iterations: 12, power: 7.6, bailout: 8.0, scale: 1.12, growth: 1.32, wSpin: 0.0, twist: 0.28,
-      cameraMode: "Chase", orbitRadius: 4.3, orbitSpeed: 0.24, texturePreset: "Cells", textureScale: 1.8,
-      textureFlow: 0.16, textureMix: 0.32, roughness: 0.58, metallic: 0.08, glow: 0.13, paletteShift: -0.16
+    "Growing Lattice": {
+      fractalMode: 0, iterations: 12, scale: 1.18, filament: 0.42, growth: 2.05, flowSpeed: 0.72, flowWarp: 0.42, twist: 0.54,
+      cameraMode: "Follow Growth", orbitRadius: 4.0, orbitSpeed: 0.44, fov: 63, texturePreset: "Grid",
+      textureScale: 3.7, textureFlow: 0.18, textureMix: 0.30, grain: 0.72, roughness: 0.79, metallic: 0.10, glow: 0.22, fog: 0.12
     },
-    "Folded Cathedral": {
-      fractalMode: 2, iterations: 12, scale: 0.92, fold: 2.45, growth: 0.45, twist: 0.67,
-      cameraMode: "Lissajous", orbitRadius: 5.6, orbitHeight: 0.9, texturePreset: "Grid", textureScale: 2.8,
-      textureFlow: 0.04, textureMix: 0.28, roughness: 0.31, metallic: 0.52, glow: 0.1, fog: 0.13, paletteShift: 0.55
+    "4D Stream": {
+      fractalMode: 1, iterations: 13, scale: 1.10, juliaX: -0.08, juliaY: 0.71, juliaZ: 0.12, juliaW: -0.31,
+      growth: 1.12, flowSpeed: 0.92, flowWarp: 0.48, slice: 0.24, wSpin: 1.08, twist: 0.88,
+      cameraMode: "Flow Chase", orbitRadius: 3.5, orbitSpeed: 0.58, fov: 66, texturePreset: "Veins",
+      textureScale: 2.6, textureFlow: -0.13, textureMix: 0.43, grain: 0.66, glow: 0.30, roughness: 0.72, fog: 0.15
     },
-    "Loop Garden": {
-      fractalMode: 3, iterations: 10, scale: 1.24, fold: 1.35, growth: 1.55, twist: 1.12,
-      cameraMode: "Orbit", orbitRadius: 4.0, orbitSpeed: -0.14, texturePreset: "Veins", textureScale: 1.45,
-      textureFlow: 0.22, textureMix: 0.52, roughness: 0.67, metallic: 0.04, glow: 0.34, fog: 0.07, paletteShift: -0.52
+    "Mandelbulb Current": {
+      fractalMode: 2, iterations: 12, power: 7.6, bailout: 8.0, scale: 1.10, growth: 1.38, flowSpeed: 1.12, flowWarp: 0.36, twist: 0.31,
+      cameraMode: "Flythrough", orbitRadius: 3.0, orbitSpeed: 0.71, fov: 72, texturePreset: "Cells",
+      textureScale: 2.3, textureFlow: 0.21, textureMix: 0.31, grain: 0.74, roughness: 0.81, metallic: 0.05, glow: 0.12, fog: 0.17
     },
-    "Deep Chase": {
-      fractalMode: 0, iterations: 14, scale: 1.32, juliaX: -0.29, juliaY: 0.51, juliaZ: -0.34, juliaW: 0.08,
-      growth: 0.92, slice: -0.18, wSpin: -0.84, twist: 0.74, cameraMode: "Flythrough", orbitRadius: 3.25,
-      texturePreset: "Plasma", textureScale: 3.1, textureFlow: 0.28, textureMix: 0.56, glow: 0.46,
-      roughness: 0.42, metallic: 0.18, fog: 0.16, paletteShift: 0.82
+    "Folded River": {
+      fractalMode: 4, iterations: 11, scale: 1.30, fold: 1.45, growth: 1.62, flowSpeed: 1.30, flowWarp: 0.64, twist: 1.18,
+      cameraMode: "Flow Chase", orbitRadius: 3.4, orbitSpeed: 0.55, fov: 70, texturePreset: "Filament Grain",
+      textureScale: 2.0, textureFlow: 0.36, textureMix: 0.55, grain: 0.90, roughness: 0.86, metallic: 0.03, glow: 0.27, fog: 0.13
     }
   };
 
@@ -730,6 +806,10 @@ void main() {
     state.slice = Math.max(-1.5, Math.min(1.5, state.slice + jitter(0.25)));
     state.twist = Math.max(-2.5, Math.min(2.5, state.twist + jitter(0.45)));
     state.wSpin = Math.max(-2.5, Math.min(2.5, state.wSpin + jitter(0.35)));
+    state.flowSpeed = Math.max(0, Math.min(4, state.flowSpeed + jitter(0.28)));
+    state.flowWarp = Math.max(0, Math.min(1.5, state.flowWarp + jitter(0.18)));
+    state.filament = Math.max(0.02, Math.min(1, state.filament + jitter(0.10)));
+    state.grain = Math.max(0, Math.min(1.5, state.grain + jitter(0.15)));
     state.paletteShift = ((state.paletteShift + jitter(0.7) + 2) % 4) - 2;
     state.textureFlow = Math.max(-1.5, Math.min(1.5, state.textureFlow + jitter(0.18)));
     syncUI();
@@ -784,7 +864,7 @@ void main() {
     const out = {};
     Object.keys(DEFAULT).forEach(key => out[key] = state[key]);
     out.texturePreset = customTextureLoaded ? "Custom image (not embedded)" : state.texturePreset;
-    out.reconstructionVersion = 1;
+    out.reconstructionVersion = 2;
     return out;
   }
 
@@ -820,7 +900,7 @@ void main() {
             state[key] = incoming[key];
           }
         });
-        if (["Plasma", "Veins", "Cells", "Grid"].includes(state.texturePreset)) uploadProcedural(state.texturePreset);
+        if (["Filament Grain", "Plasma", "Veins", "Cells", "Grid"].includes(state.texturePreset)) uploadProcedural(state.texturePreset);
         syncUI();
         resize(true);
       } catch (error) {
@@ -909,55 +989,62 @@ void main() {
     ];
   }
 
+  function flowPath(t, lead = 0, rate = 0.80) {
+    const travel = (t + lead) * state.flowSpeed * rate;
+    const z = -travel;
+    const advectedZ = z + t * state.flowSpeed;
+    const x = (Math.sin(advectedZ * 0.21) + 0.45 * Math.sin(advectedZ * 0.57 + 1.2)) * state.flowWarp;
+    const y = (Math.cos(advectedZ * 0.17 + 0.7) + 0.35 * Math.sin(advectedZ * 0.43 - 0.4)) * state.flowWarp;
+    return [x, y + state.orbitHeight * 0.18, z];
+  }
+
   function cameraForTime(t, dt) {
     const radius = state.orbitRadius * manualZoom;
     let desiredPos;
-    let desiredTarget = [0, 0, 0];
+    let desiredTarget;
 
-    if (state.cameraMode === "Observer") {
-      desiredPos = orbitPosition(manualYaw, radius, state.orbitHeight);
-    } else if (state.cameraMode === "Chase") {
-      const phase = t * (0.42 + Math.abs(state.orbitSpeed) * 0.7);
-      desiredTarget = [
-        Math.sin(phase * 1.13) * 0.72,
-        Math.sin(phase * 0.71) * 0.38,
-        Math.cos(phase * 0.91) * 0.72
-      ];
-      const trail = [
-        -Math.cos(phase * 1.13),
-        0.22 + 0.18 * Math.sin(phase * 0.43),
-        Math.sin(phase * 0.91)
-      ];
-      desiredPos = add(desiredTarget, scale(trail, radius * 0.72));
-      desiredPos[1] += state.orbitHeight * 0.65;
-      desiredPos = add(desiredPos, orbitPosition(manualYaw, radius * 0.12, manualPitch * 0.25));
+    if (state.cameraMode === "Flow Chase") {
+      desiredPos = flowPath(t, -0.55 - radius * 0.05, 0.78);
+      desiredTarget = flowPath(t, 1.05, 0.78);
+      desiredPos[0] += Math.sin(manualYaw) * radius * 0.18;
+      desiredPos[1] += Math.sin(manualPitch) * radius * 0.18;
     } else if (state.cameraMode === "Flythrough") {
-      const phase = t * (0.24 + Math.abs(state.orbitSpeed) * 0.28);
-      desiredPos = [
-        Math.sin(phase * 0.91 + manualYaw) * radius * 0.58,
-        state.orbitHeight * 0.32 + Math.sin(phase * 0.53 + manualPitch) * 0.72,
-        Math.cos(phase * 0.77 + manualYaw) * radius * 0.58
-      ];
-      desiredTarget = [
-        Math.sin((phase + 0.42) * 0.91) * 0.55,
-        Math.sin((phase + 0.42) * 0.53) * 0.28,
-        Math.cos((phase + 0.42) * 0.77) * 0.55
-      ];
+      const rate = 0.48 + 0.14 * Math.abs(state.orbitSpeed);
+      desiredPos = flowPath(t, 0.0, rate);
+      desiredTarget = flowPath(t, 1.45, rate);
+      desiredPos[0] += Math.sin(manualYaw) * 0.45;
+      desiredPos[1] += Math.sin(manualPitch) * 0.38;
+    } else if (state.cameraMode === "Follow Growth") {
+      desiredPos = flowPath(t, -1.4, 0.96);
+      desiredTarget = flowPath(t, 1.8 + 0.35 * state.growth, 0.96);
+      const roll = t * state.orbitSpeed * 0.42 + manualYaw;
+      desiredPos[0] += Math.cos(roll) * radius * 0.18;
+      desiredPos[1] += Math.sin(roll + manualPitch) * radius * 0.14;
+    } else if (state.cameraMode === "Observer") {
+      desiredTarget = flowPath(t, 0.0, 0.84);
+      desiredPos = add(desiredTarget, orbitPosition(manualYaw, radius, state.orbitHeight));
+    } else if (state.cameraMode === "Chase") {
+      desiredTarget = flowPath(t, 0.65, 0.70);
+      desiredPos = flowPath(t, -0.85, 0.70);
+      const sway = t * (0.42 + Math.abs(state.orbitSpeed) * 0.7);
+      desiredPos[0] += Math.sin(sway * 1.13 + manualYaw) * radius * 0.22;
+      desiredPos[1] += Math.sin(sway * 0.71 + manualPitch) * radius * 0.12;
     } else if (state.cameraMode === "Lissajous") {
+      desiredTarget = flowPath(t, 0.4, 0.86);
       const phase = t * (0.20 + Math.abs(state.orbitSpeed) * 0.46);
-      desiredPos = [
+      desiredPos = add(desiredTarget, [
         Math.sin(phase * 1.37 + manualYaw) * radius,
-        state.orbitHeight + Math.sin(phase * 0.83 + manualPitch) * radius * 0.34,
+        Math.sin(phase * 0.83 + manualPitch) * radius * 0.34,
         Math.cos(phase * 1.09 + manualYaw * 0.7) * radius
-      ];
-      desiredTarget = [0.18 * Math.sin(phase * 0.47), 0.15 * Math.cos(phase * 0.59), 0.12 * Math.sin(phase * 0.71)];
+      ]);
     } else if (state.cameraMode === "4D Lock") {
+      desiredTarget = flowPath(t, 0.35, 0.88);
       const angle = t * state.wSpin * 0.37 + t * state.orbitSpeed + manualYaw;
-      desiredPos = orbitPosition(angle, radius, state.orbitHeight + Math.sin(t * state.wSpin * 0.19) * 0.55);
-      desiredTarget = [0.0, 0.12 * Math.sin(t * 0.23), 0.0];
+      desiredPos = add(desiredTarget, orbitPosition(angle, radius, state.orbitHeight + Math.sin(t * state.wSpin * 0.19) * 0.45));
     } else {
+      desiredTarget = flowPath(t, 0.0, 0.88);
       const angle = t * state.orbitSpeed + manualYaw;
-      desiredPos = orbitPosition(angle, radius, state.orbitHeight);
+      desiredPos = add(desiredTarget, orbitPosition(angle, radius, state.orbitHeight));
     }
 
     const response = 1 - Math.exp(-Math.max(0.001, dt) * state.chaseLag);
@@ -1004,6 +1091,10 @@ void main() {
     uniform1f("uSlice", state.slice);
     uniform1f("uWSpin", state.wSpin);
     uniform1f("uTwist", state.twist);
+    uniform1f("uFlowSpeed", state.flowSpeed);
+    uniform1f("uFlowWarp", state.flowWarp);
+    uniform1f("uFilament", state.filament);
+    uniform1f("uGrain", state.grain);
 
     uniform1f("uTextureScale", state.textureScale);
     uniform1f("uTextureFlow", state.textureFlow);
@@ -1063,10 +1154,10 @@ void main() {
     fatal.classList.remove("hidden");
   });
 
-  uploadProcedural("Plasma");
+  uploadProcedural("Filament Grain");
   syncUI();
   resize(true);
   updateStatus();
-  smoothCamera = orbitPosition(0, state.orbitRadius, state.orbitHeight);
+  smoothCamera = flowPath(0, -0.55, 0.78);
   requestAnimationFrame(frame);
 })();
